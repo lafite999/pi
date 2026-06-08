@@ -10,8 +10,8 @@ jobs:
       - name: Checkout pi-ios repository
         uses: actions/checkout@v4
 
-      - name: Install xcodegen
-        run: brew install xcodegen
+      - name: Install Tools
+        run: brew install xcodegen jq
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -23,7 +23,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p vendor
-          gh release download --repo dannote/pi-ios -p "vendor-libs.tar.gz"
+          LATEST_TAG=$(gh api repos/dannote/pi-ios/releases | jq -r '.[0].tag_name')
+          gh release download "$LATEST_TAG" --repo dannote/pi-ios -p "vendor-libs.tar.gz"
           tar -xzf vendor-libs.tar.gz -C vendor/
 
       - name: Build Pi Agent JS Bundle
