@@ -1,0 +1,66 @@
+name: Build Pi iOS App
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout pi-ios repository
+        uses: actions/checkout@v4
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Download Vendor Dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p vendor
+          gh release download --repo dannote/pi-ios -p "vendor-libs.tar.gz"
+          tar -xzf vendor-libs.tar.gz -C vendor/
+
+      - name: Build Pi Agent JS Bundle
+        run: |
+          git clone https://github.com/earendil-works/pi.git pi-agent
+          cd pi-agent
+          bun install
+          bun run build:ios
+          cd ..
+          mkdir -p app/Pi/Resources
+          cp pi-agent/dist/pi-ios-bundle.js app/Pi/Resources/
+
+      - name: Generate Xcode Project
+        run: |
+          cd app
+          xcodegen generate
+
+      - name: Compile Unsigned iOS App
+        run: |
+          cd app
+          xcodebuild clean build \
+            -project Pi.xcodeproj \
+            -scheme Pi \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Package into IPA
+        run: |
+          mkdir -p Payload
+          mv app/build/Release-iphoneos/Pi.app Payload/
+          zip -r Pi-Agent.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pi-Agent-iOS
+          path: Pi-Agent.ipa
+          retention-days: 7
